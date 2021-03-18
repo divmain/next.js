@@ -16,11 +16,11 @@ function write(cacheDirectory, etag, data) {
   )
 }
 
-const etag = function (source, identifier, options) {
-  return trace('etag').traceFn(() => {
+const etag = function (source, identifier, parentSpan) {
+  return parentSpan.traceChild('etag').traceFn(() => {
     const hash = createHash('md4')
 
-    const contents = JSON.stringify({ source, options, identifier })
+    const contents = JSON.stringify({ source, identifier })
 
     hash.update(contents)
 
@@ -29,18 +29,19 @@ const etag = function (source, identifier, options) {
 }
 
 export default async function handleCache(params) {
-  const span = trace('handle-cache')
+  const { parentSpan } = params
+  const handleCacheSpan = parentSpan.traceChild('handle-cache')
 
-  return span.traceAsyncFn(async () => {
+  return handleCacheSpan.traceAsyncFn(async () => {
     const { source, options = {}, cacheIdentifier, cacheDirectory } = params
 
-    const file = etag(source, cacheIdentifier)
+    const file = etag(source, cacheIdentifier, handleCacheSpan)
 
     try {
       // No errors mean that the file was previously cached
       // we just need to return it
       const res = await read(cacheDirectory, file)
-      span.setAttribute('cache', res ? 'HIT' : 'MISS')
+      handleCacheSpan.setAttribute('cache', res ? 'HIT' : 'MISS')
       return res
     } catch (err) {}
 

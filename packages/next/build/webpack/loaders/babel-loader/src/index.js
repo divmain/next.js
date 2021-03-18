@@ -33,7 +33,9 @@ async function loader(source, inputSourceMap, overrides) {
 
     let customOptions
     if (overrides && overrides.customOptions) {
-      const customoptionsSpan = trace('loader-overrides-customoptions')
+      const customoptionsSpan = loaderSpan.traceChild(
+        'loader-overrides-customoptions'
+      )
       const result = await customoptionsSpan.traceAsyncFn(
         async () =>
           await overrides.customOptions.call(this, loaderOptions, {
@@ -95,7 +97,9 @@ async function loader(source, inputSourceMap, overrides) {
     delete programmaticOptions.cacheDirectory
     delete programmaticOptions.cacheIdentifier
 
-    const partialConfigSpan = trace('babel-load-partial-config-async')
+    const partialConfigSpan = loaderSpan.traceChild(
+      'babel-load-partial-config-async'
+    )
     const config = partialConfigSpan.traceFn(() => {
       return babel.loadPartialConfig(programmaticOptions)
     })
@@ -103,7 +107,7 @@ async function loader(source, inputSourceMap, overrides) {
     if (config) {
       let options = config.options
       if (overrides && overrides.config) {
-        const overridesSpan = trace('loader-overrides-config')
+        const overridesSpan = loaderSpan.traceChild('loader-overrides-config')
         options = await overridesSpan.traceAsyncFn(
           async () =>
             await overrides.config.call(this, config, {
@@ -134,13 +138,14 @@ async function loader(source, inputSourceMap, overrides) {
           cacheDirectory,
           cacheIdentifier,
           cacheCompression: false,
+          parentSpan: loaderSpan,
         })
       } else {
-        const transformSpan = trace('transform')
+        const transformSpan = loaderSpan.traceChild('babel-transform')
         transformSpan.setAttribute('filename', filename)
         transformSpan.setAttribute('cache', 'DISABLED')
         result = await transformSpan.traceAsyncFn(async () => {
-          return transform(source, options)
+          return transform(source, options, transformSpan)
         })
       }
 
