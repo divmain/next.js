@@ -1,7 +1,6 @@
 // import babel from 'next/dist/compiled/babel/core'
 import loaderUtils from 'next/dist/compiled/loader-utils'
 import { trace } from '../../../../../telemetry/trace'
-import cache from './cache'
 import transform from './transform'
 
 // When using `import` Babel will be undefined
@@ -128,26 +127,12 @@ async function loader(source, inputSourceMap, overrides) {
         options.sourceMaps = true
       }
 
-      const { cacheDirectory, cacheIdentifier } = loaderOptions
-
-      let result
-      if (cacheDirectory) {
-        result = await cache({
-          source,
-          options,
-          cacheDirectory,
-          cacheIdentifier,
-          cacheCompression: false,
-          parentSpan: loaderSpan,
-        })
-      } else {
-        const transformSpan = loaderSpan.traceChild('babel-transform')
-        transformSpan.setAttribute('filename', filename)
-        transformSpan.setAttribute('cache', 'DISABLED')
-        result = await transformSpan.traceAsyncFn(async () => {
-          return transform(source, options, transformSpan)
-        })
-      }
+      const transformSpan = loaderSpan.traceChild('babel-transform')
+      transformSpan.setAttribute('filename', filename)
+      transformSpan.setAttribute('cache', 'DISABLED')
+      const result = await transformSpan.traceAsyncFn(async () => {
+        return transform(source, options, transformSpan)
+      })
 
       // TODO: Babel should really provide the full list of config files that
       // were used so that this can also handle files loaded with 'extends'.
