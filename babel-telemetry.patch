@@ -1,0 +1,117 @@
+diff -u -r node_modules/@babel/core/lib/transform.js ./node_modules/@babel/core-changed/lib/transform.js
+--- node_modules/@babel/core/lib/transform.js	2021-02-23 14:14:49.000000000 -0800
++++ ./node_modules/@babel/core/lib/transform.js	2021-03-23 00:18:06.000000000 -0700
+@@ -1,5 +1,7 @@
+ "use strict";
+ 
++const { trace } = require("next/dist/telemetry/trace")
++
+ Object.defineProperty(exports, "__esModule", {
+   value: true
+ });
+@@ -21,20 +23,27 @@
+ 
+ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+ 
+-const transformRunner = (0, _gensync().default)(function* transform(code, opts) {
++const transformRunner = (0, _gensync().default)(function* transform(code, opts, parentSpanId) {
++  const transformInnerSpan = trace('babel-transform-inner', parentSpanId)
++  const getBabelConfigSpan = transformInnerSpan.traceChild('babelinternal-get-config')
+   const config = yield* (0, _config.default)(opts);
++  getBabelConfigSpan.stop()
+   if (config === null) return null;
+-  return yield* (0, _transformation.run)(config, code);
++  const transformationSpan = transformInnerSpan.traceChild('babelinternal-transformation')
++  const result = yield* (0, _transformation.run)(config, code, undefined, transformationSpan);
++  transformationSpan.stop()
++  transformInnerSpan.stop()
++  return result
+ });
+ 
+-const transform = function transform(code, opts, callback) {
++const transform = function transform(code, opts, parentSpanId, callback) {
+   if (typeof opts === "function") {
+     callback = opts;
+     opts = undefined;
+   }
+ 
+-  if (callback === undefined) return transformRunner.sync(code, opts);
+-  transformRunner.errback(code, opts, callback);
++  if (callback === undefined) return transformRunner.sync(code, opts, parentSpanId);
++  transformRunner.errback(code, opts, parentSpanId, callback);
+ };
+ 
+ exports.transform = transform;
+diff -u -r node_modules/@babel/core/lib/transformation/index.js ./node_modules/@babel/core-changed/lib/transformation/index.js
+--- node_modules/@babel/core/lib/transformation/index.js	2021-02-23 14:14:49.000000000 -0800
++++ ./node_modules/@babel/core/lib/transformation/index.js	2021-03-23 00:15:09.000000000 -0700
+@@ -1,5 +1,7 @@
+ "use strict";
+ 
++const { trace } = require("next/dist/telemetry/trace")
++
+ Object.defineProperty(exports, "__esModule", {
+   value: true
+ });
+@@ -27,12 +29,16 @@
+ 
+ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+ 
+-function* run(config, code, ast) {
++function* run(config, code, ast, transformationSpan) {
++  const normalizeFileSpan = transformationSpan.traceChild('babelinternal-normalize-file')
+   const file = yield* (0, _normalizeFile.default)(config.passes, (0, _normalizeOpts.default)(config), code, ast);
++  normalizeFileSpan.stop()
+   const opts = file.opts;
+ 
+   try {
+-    yield* transformFile(file, config.passes);
++    const transformFileSpan = transformationSpan.traceChild('babelinternal-transform-file')
++    yield* transformFile(file, config.passes, transformFileSpan);
++    transformFileSpan.stop()
+   } catch (e) {
+     var _opts$filename;
+ 
+@@ -76,7 +82,7 @@
+   };
+ }
+ 
+-function* transformFile(file, pluginPasses) {
++function* transformFile(file, pluginPasses, transformFileSpan) {
+   for (const pluginPairs of pluginPasses) {
+     const passPairs = [];
+     const passes = [];
+@@ -89,6 +95,7 @@
+       visitors.push(plugin.visitor);
+     }
+ 
++    const preSpan = transformFileSpan.traceChild('babelinternal-pre');
+     for (const [plugin, pass] of passPairs) {
+       const fn = plugin.pre;
+ 
+@@ -101,11 +108,17 @@
+         }
+       }
+     }
++    preSpan.stop();
+ 
++    const mergeVisitorsSpan = transformFileSpan.traceChild('babelinternal-merge-visitors');
+     const visitor = _traverse().default.visitors.merge(visitors, passes, file.opts.wrapPluginVisitorMethod);
++    mergeVisitorsSpan.stop();
+ 
++    const traverseSpan = transformFileSpan.traceChild('babelinternal-traverse');
+     (0, _traverse().default)(file.ast, visitor, file.scope);
++    traverseSpan.stop();
+ 
++    const postSpan = transformFileSpan.traceChild('babelinternal-post');
+     for (const [plugin, pass] of passPairs) {
+       const fn = plugin.post;
+ 
+@@ -118,6 +131,7 @@
+         }
+       }
+     }
++    postSpan.stop();
+   }
+ }
+ 

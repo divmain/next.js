@@ -1,13 +1,17 @@
 import { transform as _transform } from 'next/dist/compiled/babel/core'
+
 import { promisify } from 'util'
 import LoaderError from './Error'
 
+console.log(require.resolve('@babel/core'))
+
 const transform = promisify(_transform)
 
-export default async function (source, options) {
+export default async function (source, options, parentSpan) {
   let result
   try {
-    result = await transform(source, options)
+    result = await transform(source, options, parentSpan.id)
+    // result = await transform(source, options)
   } catch (err) {
     throw err.message && err.codeFrame ? new LoaderError(err) : err
   }

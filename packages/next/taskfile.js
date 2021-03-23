@@ -48,6 +48,9 @@ const externals = {
   // webpack
   'node-libs-browser': 'node-libs-browser',
 
+  // next tracing
+  'next/dist/telemetry/trace': 'next/dist/telemetry/trace',
+
   // sass-loader
   // (also responsible for these dependencies in package.json)
   'node-sass': 'node-sass',
