@@ -73,6 +73,7 @@ import { generateBuildId } from './generate-build-id'
 import { isWriteable } from './is-writeable'
 import * as Log from './output/log'
 import createSpinner from './spinner'
+import { initHeapSnapshots } from '../telemetry/heap-snapshot'
 import { trace, setGlobal } from '../telemetry/trace'
 import {
   collectPages,
@@ -127,6 +128,10 @@ export default async function build(
     const { loadedEnvFiles } = nextBuildSpan
       .traceChild('load-dotenv')
       .traceFn(() => loadEnvConfig(dir, false, Log))
+
+    const cancelHeapSnapshots = initHeapSnapshots(
+      process.env.HEAP_SNAPSHOT_INTERVAL
+    )
 
     const config: NextConfig = await nextBuildSpan
       .traceChild('load-next-config')
@@ -1545,6 +1550,8 @@ export default async function build(
     await nextBuildSpan
       .traceChild('telemetry-flush')
       .traceAsyncFn(() => telemetry.flush())
+
+    cancelHeapSnapshots()
   })
 }
 
