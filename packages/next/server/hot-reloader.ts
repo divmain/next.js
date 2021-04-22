@@ -127,6 +127,63 @@ function erroredPages(compilation: webpack.compilation.Compilation) {
   return failedPages
 }
 
+export interface HotWebpackConfigOptions {
+  dir: string
+  pagesDir: string
+  config: NextConfig
+  buildId: string
+  previewProps: __ApiPreviewProps
+  rewrites: CustomRoutes['rewrites']
+}
+
+export async function getWebpackConfig({
+  dir,
+  pagesDir,
+  config,
+  buildId,
+  previewProps,
+  rewrites,
+}: HotWebpackConfigOptions) {
+  const pagePaths = await Promise.all([
+    findPageFile(pagesDir, '/_app', config.pageExtensions),
+    findPageFile(pagesDir, '/_document', config.pageExtensions),
+  ])
+
+  const pages = createPagesMapping(
+    pagePaths.filter((i) => i !== null) as string[],
+    config.pageExtensions
+  )
+  const entrypoints = createEntrypoints(
+    pages,
+    'server',
+    buildId,
+    previewProps,
+    config,
+    []
+  )
+
+  return Promise.all([
+    getBaseWebpackConfig(dir, {
+      dev: true,
+      isServer: false,
+      config: config,
+      buildId: buildId,
+      pagesDir: pagesDir,
+      rewrites: rewrites,
+      entrypoints: entrypoints.client,
+    }),
+    getBaseWebpackConfig(dir, {
+      dev: true,
+      isServer: true,
+      config: config,
+      buildId: buildId,
+      pagesDir: pagesDir,
+      rewrites: rewrites,
+      entrypoints: entrypoints.server,
+    }),
+  ])
+}
+
 export default class HotReloader {
   private dir: string
   private buildId: string
@@ -259,51 +316,17 @@ export default class HotReloader {
     return recursiveDelete(join(this.dir, this.config.distDir), /^cache/)
   }
 
-  private async getWebpackConfig() {
-    const pagePaths = await Promise.all([
-      findPageFile(this.pagesDir, '/_app', this.config.pageExtensions),
-      findPageFile(this.pagesDir, '/_document', this.config.pageExtensions),
-    ])
-
-    const pages = createPagesMapping(
-      pagePaths.filter((i) => i !== null) as string[],
-      this.config.pageExtensions
-    )
-    const entrypoints = createEntrypoints(
-      pages,
-      'server',
-      this.buildId,
-      this.previewProps,
-      this.config,
-      []
-    )
-
-    return Promise.all([
-      getBaseWebpackConfig(this.dir, {
-        dev: true,
-        isServer: false,
-        config: this.config,
-        buildId: this.buildId,
-        pagesDir: this.pagesDir,
-        rewrites: this.rewrites,
-        entrypoints: entrypoints.client,
-      }),
-      getBaseWebpackConfig(this.dir, {
-        dev: true,
-        isServer: true,
-        config: this.config,
-        buildId: this.buildId,
-        pagesDir: this.pagesDir,
-        rewrites: this.rewrites,
-        entrypoints: entrypoints.server,
-      }),
-    ])
-  }
-
   public async start(): Promise<void> {
     await this.clean()
 
-    const configs = await this.getWebpackConfig()
+    const configs = await getWebpackConfig({
+      dir: this.dir,
+      pagesDir: this.pagesDir,
+      config: this.config,
+      buildId: this.buildId,
+      previewProps: this.previewProps,
+      rewrites: this.rewrites,
+    })
 
     for (const config of configs) {
       const defaultEntry = config.entry
