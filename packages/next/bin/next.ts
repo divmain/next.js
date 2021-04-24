@@ -17,6 +17,8 @@ const defaultCommand = 'dev'
 export type cliCommand = (argv?: string[]) => void
 const commands: { [command: string]: () => Promise<cliCommand> } = {
   build: () => import('../cli/next-build').then((i) => i.nextBuild),
+  precompile: () =>
+    import('../cli/next-precompile').then((i) => i.nextPrecompile),
   start: () => import('../cli/next-start').then((i) => i.nextStart),
   export: () => import('../cli/next-export').then((i) => i.nextExport),
   dev: () => import('../cli/next-dev').then((i) => i.nextDev),
@@ -109,7 +111,7 @@ process.on('SIGINT', () => process.exit(0))
 commands[command]()
   .then((exec) => exec(forwardedArgs))
   .then(() => {
-    if (command === 'build') {
+    if (command === 'build' || command === 'precompile') {
       // ensure process exits after build completes so open handles/connections
       // don't cause process to hang
       process.exit(0)

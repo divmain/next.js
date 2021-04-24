@@ -36,6 +36,7 @@ import {
 } from './plugins/collect-plugins'
 import { build as buildConfiguration } from './webpack/config'
 import { __overrideCssConfiguration } from './webpack/config/blocks/css/overrideCssConfiguration'
+import { buildPrecompile } from './precompile'
 import { pluginLoaderOptions } from './webpack/loaders/next-plugin-loader'
 import BuildManifestPlugin from './webpack/plugins/build-manifest-plugin'
 import BuildStatsPlugin from './webpack/plugins/build-stats-plugin'
@@ -177,6 +178,19 @@ export function attachReactRefresh(
   }
 }
 
+interface NextWebpackConfigOptions {
+  buildId: string
+  config: NextConfig
+  dev?: boolean
+  isServer?: boolean
+  pagesDir: string
+  target?: string
+  reactProductionProfiling?: boolean
+  entrypoints: WebpackEntrypoints
+  rewrites: CustomRoutes['rewrites']
+  isPrecompile?: boolean
+}
+
 export default async function getBaseWebpackConfig(
   dir: string,
   {
@@ -189,20 +203,15 @@ export default async function getBaseWebpackConfig(
     reactProductionProfiling = false,
     entrypoints,
     rewrites,
-  }: {
-    buildId: string
-    config: NextConfig
-    dev?: boolean
-    isServer?: boolean
-    pagesDir: string
-    target?: string
-    reactProductionProfiling?: boolean
-    entrypoints: WebpackEntrypoints
-    rewrites: CustomRoutes['rewrites']
-  }
+    isPrecompile,
+  }: NextWebpackConfigOptions
 ): Promise<webpack.Configuration> {
   let plugins: PluginMetaData[] = []
   let babelPresetPlugins: { dir: string; config: any }[] = []
+
+  if (isPrecompile) {
+    dev = true
+  }
 
   const hasRewrites =
     rewrites.beforeFiles.length > 0 ||
@@ -1645,10 +1654,20 @@ export default async function getBaseWebpackConfig(
     }
   }
 
-  if (!dev) {
-    // entry is always a function
-    webpackConfig.entry = await (webpackConfig.entry as webpack.EntryFunc)()
+  // if (!dev) {
+  // entry is always a function
+  webpackConfig.entry = await (webpackConfig.entry as webpack.EntryFunc)()
+  // }
+
+  if (isPrecompile) {
+    webpackConfig = buildPrecompile(webpackConfig, isServer)
   }
+
+  // console.log(require('util').inspect(webpackConfig, {
+  //   depth: Infinity,
+  //   maxArrayLength: 10,
+  // }))
+  // process.exit(0)
 
   return webpackConfig
 }

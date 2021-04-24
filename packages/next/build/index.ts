@@ -119,7 +119,8 @@ export default async function build(
   dir: string,
   conf = null,
   reactProductionProfiling = false,
-  debugOutput = false
+  debugOutput = false,
+  isPrecompile = false
 ): Promise<void> {
   const nextBuildSpan = trace('next-build')
 
@@ -481,6 +482,7 @@ export default async function build(
             pagesDir,
             entrypoints: entrypoints.client,
             rewrites,
+            isPrecompile,
           }),
           getBaseWebpackConfig(dir, {
             buildId,
@@ -491,6 +493,7 @@ export default async function build(
             pagesDir,
             entrypoints: entrypoints.server,
             rewrites,
+            isPrecompile,
           }),
         ])
       )
